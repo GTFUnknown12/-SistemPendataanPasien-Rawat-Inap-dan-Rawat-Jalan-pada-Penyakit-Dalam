@@ -26,8 +26,72 @@ const swaggerDocument = {
       description: "Local Server"
     }
   ],
+  securityDefinitions: {
+    bearerAuth: {
+      type: "apiKey",
+      name: "Authorization",
+      in: "header",
+      description: "Bearer token untuk autentikasi. Format: Bearer <token>"
+    }
+  },
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        description: "JWT Token - Dapatkan dari endpoint /api/login"
+      }
+    },
     schemas: {
+      LoginRequest: {
+        type: "object",
+        properties: {
+          email: { type: "string", example: "test@example.com" },
+          password: { type: "string", example: "password123" }
+        },
+        required: ["email", "password"]
+      },
+      LoginResponse: {
+        type: "object",
+        properties: {
+          status: { type: "boolean", example: true },
+          message: { type: "string", example: "Login berhasil" },
+          token: { type: "string", example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." },
+          user: {
+            type: "object",
+            properties: {
+              id: { type: "integer", example: 1 },
+              name: { type: "string", example: "Test User" },
+              email: { type: "string", example: "test@example.com" }
+            }
+          }
+        }
+      },
+      RegisterRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", example: "Test User" },
+          email: { type: "string", example: "test@example.com" },
+          password: { type: "string", example: "password123" }
+        },
+        required: ["name", "email", "password"]
+      },
+      RegisterResponse: {
+        type: "object",
+        properties: {
+          status: { type: "boolean", example: true },
+          message: { type: "string", example: "Registrasi berhasil" },
+          user: {
+            type: "object",
+            properties: {
+              id: { type: "integer", example: 1 },
+              name: { type: "string", example: "Test User" },
+              email: { type: "string", example: "test@example.com" }
+            }
+          }
+        }
+      },
       Pasien: {
         type: "object",
         properties: {
@@ -98,11 +162,78 @@ const swaggerDocument = {
     }
   },
   paths: {
+    "/api/register": {
+      post: {
+        tags: ["Authentication"],
+        summary: "Daftar user baru",
+        description: "Endpoint untuk registrasi user baru. Mengembalikan data user tanpa token.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/RegisterRequest" },
+              example: {
+                name: "Test User",
+                email: "test@example.com",
+                password: "password123"
+              }
+            }
+          }
+        },
+        responses: {
+          201: {
+            description: "Registrasi berhasil",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/RegisterResponse" }
+              }
+            }
+          },
+          400: { description: "Name, email, atau password tidak dikirim" },
+          409: { description: "Email sudah terdaftar" },
+          500: { description: "Terjadi kesalahan pada server" }
+        }
+      }
+    },
+    "/api/login": {
+      post: {
+        tags: ["Authentication"],
+        summary: "Login dan dapatkan JWT Token",
+        description: "Endpoint untuk login. Mengembalikan JWT token yang digunakan untuk mengakses endpoint terproteksi.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/LoginRequest" },
+              example: {
+                email: "test@example.com",
+                password: "password123"
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: "Login berhasil, token diterima",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/LoginResponse" }
+              }
+            }
+          },
+          400: { description: "Email atau password tidak dikirim" },
+          404: { description: "User tidak ditemukan" },
+          401: { description: "Password salah" },
+          500: { description: "Terjadi kesalahan pada server" }
+        }
+      }
+    },
     "/api/penyakit-dalam": {
       get: {
         tags: ["Pemeriksaan"],
         summary: "Mengambil semua data pemeriksaan",
-        description: "Mengembalikan seluruh data pemeriksaan beserta dokter, tindakan, dan pasien. Dapat difilter berdasarkan kategori atau mengambil semua tanpa filter.",
+        description: "Mengembalikan seluruh data pemeriksaan beserta dokter, tindakan, dan pasien. Dapat difilter berdasarkan kategori atau mengambil semua tanpa filter. **Memerlukan JWT Token**",
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             in: "query",
@@ -117,13 +248,15 @@ const swaggerDocument = {
         responses: {
           200: { description: "Berhasil mengambil data pemeriksaan" },
           400: { description: "Kategori tidak valid" },
+          401: { description: "Token tidak ditemukan atau tidak valid" },
           500: { description: "Terjadi kesalahan pada server" }
         }
       },
       post: {
         tags: ["Pemeriksaan"],
         summary: "Menambahkan data pemeriksaan baru",
-        description: "Membuat data pemeriksaan baru secara nested: Pemeriksaan → Dokter (Sp.PD) → Tindakan → Pasien",
+        description: "Membuat data pemeriksaan baru secara nested: Pemeriksaan → Dokter (Sp.PD) → Tindakan → Pasien. **Memerlukan JWT Token**",
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -169,6 +302,7 @@ const swaggerDocument = {
         responses: {
           201: { description: "Data rekam medis berhasil ditambahkan" },
           400: { description: "Kategori tidak valid atau daftar_dokter kosong" },
+          401: { description: "Token tidak ditemukan atau tidak valid" },
           500: { description: "Terjadi kesalahan pada server" }
         }
       }
@@ -177,7 +311,8 @@ const swaggerDocument = {
       get: {
         tags: ["Pemeriksaan"],
         summary: "Mengambil detail data berdasarkan ID",
-        description: "Mengembalikan detail satu pemeriksaan beserta seluruh dokter, tindakan, dan pasien terkait. Parameter kategori wajib diberikan.",
+        description: "Mengembalikan detail satu pemeriksaan beserta seluruh dokter, tindakan, dan pasien terkait. Parameter kategori wajib diberikan. **Memerlukan JWT Token**",
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             in: "path",
@@ -200,6 +335,7 @@ const swaggerDocument = {
         responses: {
           200: { description: "Berhasil mengambil detail data" },
           400: { description: "Kategori wajib diisi atau tidak valid" },
+          401: { description: "Token tidak ditemukan atau tidak valid" },
           404: { description: "Data tidak ditemukan atau kategori tidak sesuai" },
           500: { description: "Terjadi kesalahan pada server" }
         }
@@ -207,7 +343,8 @@ const swaggerDocument = {
       put: {
         tags: ["Pemeriksaan"],
         summary: "Memperbarui kategori pemeriksaan",
-        description: "Hanya dapat mengubah kategori pemeriksaan (rawat inap / rawat jalan). Untuk mengubah dokter/tindakan/pasien, gunakan endpoint masing-masing.",
+        description: "Hanya dapat mengubah kategori pemeriksaan (rawat inap / rawat jalan). Untuk mengubah dokter/tindakan/pasien, gunakan endpoint masing-masing. **Memerlukan JWT Token**",
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             in: "path",
@@ -262,6 +399,7 @@ const swaggerDocument = {
         responses: {
           200: { description: "Data berhasil diperbarui" },
           400: { description: "Kategori tidak valid" },
+          401: { description: "Token tidak ditemukan atau tidak valid" },
           404: { description: "Data tidak ditemukan" },
           500: { description: "Terjadi kesalahan pada server" }
         }
@@ -269,7 +407,8 @@ const swaggerDocument = {
       delete: {
         tags: ["Pemeriksaan"],
         summary: "Menghapus data pemeriksaan",
-        description: "Menghapus pemeriksaan beserta seluruh dokter, tindakan, dan pasien terkait (Cascade Delete).",
+        description: "Menghapus pemeriksaan beserta seluruh dokter, tindakan, dan pasien terkait (Cascade Delete). **Memerlukan JWT Token**",
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             in: "path",
@@ -281,6 +420,7 @@ const swaggerDocument = {
         ],
         responses: {
           200: { description: "Data beserta detail dokter, tindakan, dan pasien berhasil dihapus" },
+          401: { description: "Token tidak ditemukan atau tidak valid" },
           404: { description: "Data tidak ditemukan" },
           500: { description: "Terjadi kesalahan pada server" }
         }
