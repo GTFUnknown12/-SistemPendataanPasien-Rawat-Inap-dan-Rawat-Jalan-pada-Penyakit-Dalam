@@ -1,6 +1,5 @@
 import prisma from "../database/dbConfig.js";
 
-// Helper untuk mengatasi error bawaan Node.js saat membaca tipe data BigInt ke JSON
 const serializeData = (data) => {
     return JSON.parse(JSON.stringify(data, (key, value) =>
         typeof value === 'bigint' ? value.toString() : value
